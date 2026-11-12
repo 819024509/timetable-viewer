@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomBytes, createCipheriv } from "node:crypto";
+import { pbkdf2Sync, randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 
 export const PBKDF2_ITERATIONS = 210000;
 
@@ -22,4 +22,20 @@ export function encryptPayload(payload, passphrase) {
     iv: iv.toString("base64"),
     data: Buffer.concat([ciphertext, tag]).toString("base64"),
   };
+}
+
+export function decryptPayload(envelope, passphrase) {
+  if (envelope.v !== 1 || envelope.kdf !== "PBKDF2-SHA256") {
+    throw new Error("unsupported snapshot format");
+  }
+  const salt = Buffer.from(envelope.salt, "base64");
+  const iv = Buffer.from(envelope.iv, "base64");
+  const data = Buffer.from(envelope.data, "base64");
+  const tag = data.subarray(data.length - 16);
+  const ciphertext = data.subarray(0, data.length - 16);
+  const key = pbkdf2Sync(passphrase, salt, envelope.iter, 32, "sha256");
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return JSON.parse(plain.toString("utf8"));
 }

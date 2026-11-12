@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { encryptPayload } from "./crypto.mjs";
+import { encryptPayload, decryptPayload } from "./crypto.mjs";
 
 const API_URL = process.env.API_URL;
 const TEACHER_ID = process.env.TEACHER_ID;
@@ -93,6 +93,22 @@ async function main() {
     days: days.length,
     events,
   };
+
+  if (fs.existsSync(OUTPUT_FILE)) {
+    try {
+      const prev = decryptPayload(JSON.parse(fs.readFileSync(OUTPUT_FILE, "utf8")), PASSPHRASE);
+      if (prev.startDate === payload.startDate &&
+          prev.endDate === payload.endDate &&
+          prev.days === payload.days &&
+          JSON.stringify(prev.events) === JSON.stringify(payload.events)) {
+        console.log("snapshot unchanged; keeping existing encrypted file");
+        return;
+      }
+    } catch (err) {
+      console.error(`existing snapshot unreadable, replacing: ${err.message}`);
+    }
+  }
+
   const envelope = encryptPayload(payload, PASSPHRASE);
 
   fs.mkdirSync("data", { recursive: true });
